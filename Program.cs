@@ -1,11 +1,11 @@
-using Microsoft.EntityFrameworkCore;
-using MyApiApp.Data;
+using MyApiApp.Services; // Assuming MongoDbService is in the Services folder
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Read connection string from the environment variable DATABASE_URL
-// var connectionString = Environment.GetEnvironmentVariable("DATABASE_URL");
-var connectionString = "Server=junction.proxy.rlwy.net;Database=railway;User=root;Password=IVYdSwxGvWbSvpHsQNzTQyPCXgQzIBtj;Port=12398;";
+// Read connection string and database name from environment variables or hardcoded for now
+var connectionString = Environment.GetEnvironmentVariable("DATABASE_URL") 
+    ?? "mongodb://mongo:wcoejUokOtszAnyAmNLggJkkWAEfbVWz@autorack.proxy.rlwy.net:10353";
+var databaseName = "test";
 
 if (string.IsNullOrEmpty(connectionString))
 {
@@ -15,10 +15,8 @@ if (string.IsNullOrEmpty(connectionString))
 // Add services to the container.
 builder.Services.AddControllers();
 
-// Register DbContext with the connection string from the environment variable
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
-
+// Register MongoDbService with connection string and database name
+builder.Services.AddSingleton(sp => new MongoDbService(connectionString, databaseName));
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();

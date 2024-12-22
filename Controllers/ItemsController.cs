@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using MyApiApp.Data;
+using MongoDB.Driver;
 using MyApiApp.Models;
+using MyApiApp.Services;
 
 namespace MyApiApp.Controllers
 {
@@ -9,42 +9,74 @@ namespace MyApiApp.Controllers
     [ApiController]
     public class ItemsController : ControllerBase
     {
-        private readonly AppDbContext _context;
+        private readonly IMongoCollection<Item> _itemsCollection;
 
-        public ItemsController(AppDbContext context)
+        public ItemsController(MongoDbService mongoDbService)
         {
-            _context = context;
+            if (mongoDbService == null)
+            {
+                throw new ArgumentNullException(nameof(mongoDbService), "MongoDbService cannot be null.");
+            }
+
+            // Initialize the collection (ensure the collection name matches your MongoDB setup)
+            _itemsCollection = mongoDbService.GetCollection<Item>("items"); 
         }
 
         // GET: api/items
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Item>>> GetItems()
         {
-            return await _context.Items.ToListAsync();
+            try
+            {
+                var items = await _itemsCollection.Find(Builders<Item>.Filter.Empty).ToListAsync();
+                return Ok(items);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Internal server error: {ex.Message}");
+            }
         }
 
-        // GET: api/items/5
-        [HttpGet("{id}")]
-        public async Task<ActionResult<Item>> GetItem(int id)
+        // GET: api/items/{id}
+        [HttpGet("{id:length(24)}")] // MongoDB ObjectId length validation
+        public async Task<ActionResult<Item>> GetItem(string id)
         {
-            var item = await _context.Items.FindAsync(id);
-
-            if (item == null)
+            try
             {
-                return NotFound();
-            }
+                var item = await _itemsCollection.Find(i => i.Id == id).FirstOrDefaultAsync();
 
-            return item;
+                if (item == null)
+                {
+                    return NotFound($"Item with ID {id} was not found.");
+                }
+
+                return Ok(item);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Internal server error: {ex.Message}");
+            }
         }
 
         // POST: api/items
         [HttpPost]
-        public async Task<ActionResult<Item>> PostItem(Item item)
+        public async Task<ActionResult<Item>> PostItem([FromBody] Item item)
         {
-            _context.Items.Add(item);
-            await _context.SaveChangesAsync();
+            try
+            {
+                if (item == null)
+                {
+                    return BadRequest("Item cannot be null.");
+                }
 
-            return CreatedAtAction("GetItem", new { id = item.Id }, item);
+                await _itemsCollection.InsertOneAsync(item);
+
+                return CreatedAtAction(nameof(GetItem), new { id = item.Id }, item);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Internal server error: {ex.Message}");
+            }
         }
     }
 }
